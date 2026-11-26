@@ -1,5 +1,7 @@
 # Bella Massa · Gestão de pizzaria
 
+> Projeto acadêmico desenvolvido por **Tullio Oliveira** e **Tassiana Oliveira**.
+
 Projeto acadêmico de adaptação do **Sakai Vue**, template da família PrimeFaces, utilizando **Vue 3, PrimeVue 4 e Vite**.
 
 A proposta é uma pizzaria fictícia chamada Bella Massa. O nome, a descrição e os dados de atendimento podem ser alterados na tela **Configurações**.
