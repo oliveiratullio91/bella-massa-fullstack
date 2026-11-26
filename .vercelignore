@@ -1,0 +1,9 @@
+node_modules
+dist
+.git
+**/.git
+.vscode
+.env*
+*.log*
+.output
+data/

@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: bella-massa-demo
+    runtime: node
+    plan: free
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeployTrigger: 'off'
+    envVars:
+      - key: BELLA_MASSA_DATA_DIR
+        value: /tmp/bella-massa-demo
+      - key: BELLA_MASSA_ADMIN_PASSWORD
+        generateValue: true
+      - key: BELLA_MASSA_JWT_SECRET
+        generateValue: true
