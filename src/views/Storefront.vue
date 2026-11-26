@@ -29,6 +29,7 @@ const announcement = ref('');
 const cart = ref([]);
 const type = ref('Entrega');
 const checkout = ref({ address: '', payment: 'Pix', notes: '' });
+const receiptEmail = ref('');
 const submitting = ref(false);
 let feedbackTimer;
 let refreshTimer;
@@ -182,6 +183,7 @@ async function openCheckout() {
     const city = [customer.value.municipality, customer.value.uf].filter(Boolean).join(' / ');
     const address = [customer.value.address, customer.value.neighborhood, city].filter(Boolean).join(' · ');
     checkout.value = { address: address.length <= 250 ? address : customer.value.address, payment: 'Pix', notes: '' };
+    receiptEmail.value = '';
     checkoutOpen.value = true;
 }
 
@@ -208,6 +210,7 @@ async function sendOrder(event) {
     submitting.value = true;
     const data = {
         ...checkout.value,
+        ...(settings.value.emailReceipts && receiptEmail.value.trim() ? { receiptEmail: receiptEmail.value.trim() } : {}),
         type: type.value,
         items: cart.value.map(({ productId, size, quantity }) => ({ productId, size, quantity })),
         expectedTotal: total.value
@@ -222,7 +225,10 @@ async function sendOrder(event) {
         attempt = null;
         cart.value = [];
         checkoutOpen.value = false;
-        notify({ severity: 'success', summary: 'Pedido recebido', detail: `Seu pedido #${receipt.id} chegou à pizzaria. Total de ${formatCurrency(receipt.total)}.` });
+        const detail = [`Seu pedido #${receipt.id} chegou à pizzaria. Total de ${formatCurrency(receipt.total)}.`];
+        if (receipt.emailStatus === 'sent') detail.push('Enviamos a confirmação por e-mail.');
+        if (receipt.emailStatus === 'unconfirmed') detail.push('O envio do e-mail não foi confirmado. Seu pedido está salvo.');
+        notify({ severity: 'success', summary: 'Pedido recebido', detail: detail.join(' ') });
     } catch (error) {
         if (error.status === 401) {
             customer.value = null;
@@ -344,6 +350,10 @@ async function sendOrder(event) {
                     >
                 </div>
                 <div class="field"><label for="store-order-notes">Observações</label><Textarea id="store-order-notes" v-model="checkout.notes" placeholder="Ex.: sem cebola ou interfone 12" rows="2" maxlength="400" fluid /></div>
+                <div v-if="settings?.emailReceipts" class="field">
+                    <label for="store-order-email">Receber confirmação por e-mail (opcional)</label>
+                    <InputText id="store-order-email" v-model="receiptEmail" type="email" autocomplete="email" maxlength="254" fluid />
+                </div>
                 <div class="store-checkout-total">
                     <span>Total do pedido</span><strong>{{ formatCurrency(total) }}</strong>
                 </div>

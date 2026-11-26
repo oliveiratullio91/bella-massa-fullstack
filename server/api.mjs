@@ -7,6 +7,7 @@ import { createAdminUsers } from './admin-users.mjs';
 import { adminResources, errorCodes } from './api-contract.mjs';
 import { openDatabase, runtimeDirectory } from './database.mjs';
 import { locationRoutes } from './locations.mjs';
+import { createReceiptClaims, googleReceiptSender } from './order-email.mjs';
 import { openApiDocument } from './openapi.mjs';
 import { fingerprint, hashPassword, loadAdminPassword, loadJwtKey, sameSecret, token, verifyPassword } from './security.mjs';
 import { handleSwagger } from './swagger.mjs';
@@ -103,12 +104,14 @@ export function createPizzariaApi({
         .map((origin) => origin.trim())
         .filter(Boolean),
     crossSiteCookies = process.env.BELLA_MASSA_CROSS_SITE_COOKIES === '1',
-    fetchAddress
+    fetchAddress,
+    sendReceipt = googleReceiptSender()
 } = {}) {
     if (crossSiteCookies && !secureCookies) throw new Error('Cookies entre sites exigem HTTPS e configuração de cookies seguros.');
     const jwtKey = loadJwtKey(databasePath);
     const repository = openDatabase(databasePath, now);
     const { db } = repository;
+    const receiptClaims = createReceiptClaims(db, now);
     const users = createAdminUsers(repository, adminPassword);
     const failedAttempts = new Map();
     const accountFor = db.prepare('SELECT password_hash FROM customer_accounts WHERE customer_id = ?');
@@ -255,14 +258,15 @@ export function createPizzariaApi({
         return { ok: true };
     }
 
-    function submitOrder(request, data) {
+    async function submitOrder(request, data) {
         const requestId = field(data.requestId, 70, 'identificação do pedido', true);
         requireValue(/^[a-zA-Z0-9-]{16,70}$/.test(requestId), 422, 'Atualize a página e tente novamente.');
         requireValue(['Entrega', 'Retirada'].includes(data.type), 422, 'Escolha entrega ou retirada.');
         requireValue(Array.isArray(data.items) && data.items.length <= 30 && data.items.every(record), 422, 'Confira os itens do carrinho.');
         requireValue(Number.isFinite(data.expectedTotal), 422, 'Confira o valor do pedido.');
 
-        return repository.transaction(() => {
+        let ticket;
+        const receipt = repository.transaction(() => {
             const store = createPizzariaStore({ now, initialState: repository.read().state });
             const customer = customerFrom(request, store.state);
             // A mesma tentativa de compra devolve o recibo já salvo e evita criar um segundo pedido. [Tullio e Tassiana Oliveira]
@@ -282,10 +286,24 @@ export function createPizzariaApi({
             requireValue(order.total === money(data.expectedTotal), 409, 'O valor do carrinho mudou. Confira o novo total antes de continuar.');
             order.source = 'site';
             const result = { id: order.id, total: order.total, status: order.status };
+            if (data.receiptEmail) {
+                result.emailStatus = 'unconfirmed';
+                if (sendReceipt) ticket = receiptClaims.issue(data.receiptEmail, order);
+            }
             repository.write(store.state);
             db.prepare('INSERT INTO order_requests (customer_id, request_id, response) VALUES (?, ?, ?)').run(customer.id, requestId, JSON.stringify(result));
             return result;
         });
+        if (!ticket) return receipt;
+        try {
+            if (await sendReceipt(ticket)) receipt.emailStatus = 'sent';
+        } catch {
+            // O pedido já foi gravado. Uma falha do serviço de e-mail não desfaz a compra.
+        } finally {
+            receiptClaims.discard(ticket);
+        }
+        db.prepare('UPDATE order_requests SET response = ? WHERE customer_id = ? AND request_id = ?').run(JSON.stringify(receipt), request.customerSession.customer_id, requestId);
+        return receipt;
     }
 
     function applyAdminAction(action, getArgs) {
@@ -334,6 +352,11 @@ export function createPizzariaApi({
 
     const routes = {
         ...locationRoutes(fetchAddress),
+        'POST /api/receipts/claim': (request, response, data) => {
+            const receipt = receiptClaims.redeem(data.ticket);
+            requireValue(receipt, 404, 'Recibo indisponível.');
+            return receipt;
+        },
         'GET /api/health': () => {
             let ready = false;
             try {
@@ -348,7 +371,7 @@ export function createPizzariaApi({
         'GET /api/menu': () => {
             const { state } = repository.read();
             const { name, subtitle, isOpen, deliveryFee, estimatedTime, address } = state.settings;
-            return { products: state.products.filter((product) => product.active), settings: { name, subtitle, isOpen, deliveryFee, estimatedTime, address } };
+            return { products: state.products.filter((product) => product.active), settings: { name, subtitle, isOpen, deliveryFee, estimatedTime, address, emailReceipts: Boolean(sendReceipt) } };
         },
         'GET /api/customer/session': (request) => {
             const customer = customerFrom(request, repository.read().state, false);

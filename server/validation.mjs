@@ -34,6 +34,7 @@ const fieldNames = {
     productId: 'produto',
     quantity: 'quantidade',
     requestId: 'identificação do pedido',
+    receiptEmail: 'e-mail de confirmação',
     size: 'tamanho',
     state: 'dados a importar',
     type: 'atendimento',

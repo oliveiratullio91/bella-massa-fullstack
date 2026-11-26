@@ -67,6 +67,36 @@ const draftOrder = (requestId) => ({
 });
 const saveCustomer = (admin, customer) => admin.request('/admin/action', { action: 'saveCustomer', args: [customer] });
 
+test('recibo opcional por e-mail usa autorização única e preserva o pedido em caso de falha', async (t) => {
+    const deliveries = [];
+    const server = await listen(':memory:', {
+        sendReceipt: async (ticket) => {
+            const service = client(server);
+            const claim = await service.request('/receipts/claim', { ticket });
+            assert.equal(claim.status, 200);
+            assert.equal((await service.request('/receipts/claim', { ticket })).status, 404);
+            deliveries.push(claim.data);
+            if (deliveries.length === 2) throw new Error('Falha simulada');
+            return true;
+        }
+    });
+    t.after(() => server.close());
+    const customer = client(server);
+    assert.equal((await customer.request('/menu')).data.settings.emailReceipts, true);
+    await customer.request('/customer/register', registration('85990001020'));
+    const order = { ...draftOrder('teste-email-unico-001'), receiptEmail: 'cliente@example.test' };
+    assert.equal((await customer.request('/customer/orders', { ...order, receiptEmail: 'um@example.test,dois@example.test' })).status, 422);
+    const placed = await customer.request('/customer/orders', order);
+    assert.equal(placed.data.emailStatus, 'sent');
+    assert.deepEqual(deliveries, [{ email: order.receiptEmail, id: placed.data.id, total: order.expectedTotal }]);
+    assert.deepEqual((await customer.request('/customer/orders', order)).data, placed.data);
+    const failed = await customer.request('/customer/orders', { ...order, requestId: 'teste-email-falha-002' });
+    assert.equal(failed.data.emailStatus, 'unconfirmed');
+    assert.equal((await customer.request('/customer/orders', draftOrder('teste-sem-email-003'))).data.emailStatus, undefined);
+    assert.equal(deliveries.length, 2);
+    assert.equal((await customer.request('/customer/orders')).data.orders.length, 3);
+});
+
 test('saúde e Swagger são públicos e o contrato descreve os cookies de sessão', async (t) => {
     const server = await listen();
     t.after(() => server.close());

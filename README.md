@@ -4,12 +4,17 @@ Projeto acadêmico de adaptação do **Sakai Vue**, template da família PrimeFa
 
 A proposta é uma pizzaria fictícia chamada Bella Massa. O nome, a descrição e os dados de atendimento podem ser alterados na tela **Configurações**.
 
+## Demonstração da equipe
+
+Tullio e Tassiana Oliveira · [Loja](https://bella-massa-demo.onrender.com/) · [Painel administrativo](https://bella-massa-demo.onrender.com/admin) · [Swagger](https://bella-massa-demo.onrender.com/api/docs) · [Saúde da API e do SQLite](https://bella-massa-demo.onrender.com/api/health).
+
+O Render pode levar alguns instantes para iniciar a demonstração após um período sem acessos. O banco da demonstração gratuita é temporário.
+
 ## Executar localmente
 
 Use Node.js 24 e npm.
 
 ```bash
-git submodule update --init --recursive
 npm ci
 npm run dev
 ```
@@ -93,6 +98,14 @@ Crie um **Web Service** com runtime Node.js para servir a loja, o painel e a API
 
 O arquivo `render.yaml` descreve a demonstração gratuita como um Blueprint. Ao criar o Blueprint a partir do repositório, o Render gera `BELLA_MASSA_ADMIN_PASSWORD` e `BELLA_MASSA_JWT_SECRET`. A senha fica na página **Environment** do serviço. A loja fica em `/`, o painel em `/admin` e o Swagger em `/api/docs`.
 
+### Confirmação do pedido pelo Gmail
+
+Na conta Google que será a remetente, crie um projeto no Apps Script com o código de `integrations/google/Confirmacao.gs`. O código usa o domínio público da demonstração. Para uma instalação própria, substitua esse domínio pelo endereço HTTPS da sua API.
+
+Em **Implantar → Nova implantação → App da Web**, execute como proprietário e permita acesso a **Qualquer pessoa** para que o servidor consiga chamar o script. Autorize o envio de e-mail e a conexão à API. Configure a URL que termina em `/exec` na variável `BELLA_MASSA_MAIL_URL` do serviço web e reinicie o serviço.
+
+Com o envio configurado, o checkout oferece um campo de e-mail opcional. O script resgata o destinatário e o valor diretamente da API com uma autorização aleatória, válida por um minuto e para um único uso. O pedido permanece salvo se o Gmail estiver indisponível. Repetir a mesma requisição de compra recupera o recibo original.
+
 | Configuração | Valor |
 | --- | --- |
 | Build Command | `npm ci --include=dev && npm run build` |
@@ -119,7 +132,6 @@ No Render, o processo escuta em `0.0.0.0` e os cookies de sessão usam o atribut
 - `src/styles/pizzaria.scss`: personalização visual e responsividade.
 - `tests/pizzaria.test.mjs`: testes das regras de pedidos e persistência.
 - `tests/loja-api.test.mjs`: testes da integração entre loja, painel e servidor.
-- `.vercel/backup/`: registros da recuperação do projeto original.
 
 ## Entrega U2A2
 

@@ -54,6 +54,7 @@ function operation(method, path, { tag, id, summary, response, auth, body, failu
 
 operation('get', '/health', { tag: catalog, id: 'healthCheck', summary: 'Verificar serviço e banco', response: 'Health', failures: [503] });
 operation('get', '/menu', { tag: catalog, id: 'getMenu', summary: 'Consultar cardápio público', response: 'Menu' });
+operation('post', '/receipts/claim', { tag: orders, id: 'claimReceipt', summary: 'Resgatar recibo para envio por e-mail', description: 'Integração entre servidores. O identificador aleatório expira em um minuto e só pode ser usado uma vez.', response: 'MailReceipt', failures: [404] });
 operation('get', '/openapi.json', { tag: catalog, id: 'getOpenApi', summary: 'Obter o contrato OpenAPI', response: 'OpenApi' });
 
 operation('get', '/customer/session', { tag: account, id: 'customerSession', summary: 'Consultar sessão da loja', response: 'CustomerSession' });

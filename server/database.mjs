@@ -44,6 +44,13 @@ export function openDatabase(filename, now) {
             response TEXT NOT NULL,
             PRIMARY KEY (customer_id, request_id)
         );
+        CREATE TABLE IF NOT EXISTS receipt_claims (
+            digest TEXT PRIMARY KEY,
+            email TEXT NOT NULL,
+            order_id INTEGER NOT NULL,
+            total REAL NOT NULL,
+            expires_at INTEGER NOT NULL
+        );
     `);
     db.prepare('INSERT OR IGNORE INTO pizzaria_state (id, document) VALUES (1, ?)').run(JSON.stringify(createDemoData(now())));
     const selectState = db.prepare('SELECT document, revision FROM pizzaria_state WHERE id = 1');

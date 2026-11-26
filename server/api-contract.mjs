@@ -15,6 +15,7 @@ const bool = { type: 'boolean' };
 const id = text(128, 1);
 const orderId = number(1, Number.MAX_SAFE_INTEGER, 'integer');
 const amount = { type: 'number', minimum: 0 };
+const receiptEmail = { ...text(254, 3), type: 'string', pattern: "^[a-zA-Z0-9_+'%.-]+@[a-zA-Z0-9-]+(?:\\.[a-zA-Z0-9-]+)+(?![\\s\\S])", description: 'Um único endereço para receber a confirmação deste pedido.' };
 const dateTime = { type: 'string', format: 'date-time' };
 const phone = { ...text(20, 1), description: 'Telefone nacional com DDD e 10 ou 11 dígitos. Aceita pontuação.', examples: ['(85) 91234-5678'] };
 const time = { type: 'string', pattern: '^(?:[01]\\d|2[0-3]):[0-5]\\d$', examples: ['18:00'] };
@@ -46,6 +47,7 @@ export const requestNames = {
     'POST /api/customer/login': 'CustomerLogin',
     'PATCH /api/customer/profile': 'CustomerProfile',
     'POST /api/customer/orders': 'PlaceOrder',
+    'POST /api/receipts/claim': 'ReceiptClaim',
     'POST /api/admin/login': 'AdminLogin',
     'POST /api/admin/users': 'NewAdminUser',
     'PATCH /api/admin/users/:id': 'EditAdminUser',
@@ -114,7 +116,7 @@ export function createSchemas(ref) {
         ProductDraft: object(product, ['name', 'category', 'price']),
         ProductPatch: patch(product),
         Product: object({ ...product, kind: choice(['pizza', 'bebida', 'extra', 'sobremesa']) }),
-        PublicSettings: object(publicSettings),
+        PublicSettings: object({ ...publicSettings, emailReceipts: bool }),
         Settings: object({ ...publicSettings, phone, opensAt: time, closesAt: time }, ['name', 'subtitle', 'address', 'deliveryFee', 'estimatedTime', 'phone', 'opensAt', 'closesAt']),
         Menu: object({ products: list(ref('Product')), settings: ref('PublicSettings') }),
         OrderDraftItem: object({ productId: id, quantity: number(1, 50, 'integer'), size: choice([...SIZES.map(({ value }) => value), 'Unidade']) }, ['productId', 'quantity']),
@@ -124,13 +126,16 @@ export function createSchemas(ref) {
             {
                 ...orderBody,
                 items: list(ref('OrderDraftItem'), 1, 30),
+                receiptEmail,
                 type: choice(['Entrega', 'Retirada']),
                 requestId: { type: 'string', pattern: '^[a-zA-Z0-9-]{16,70}$', description: 'Identificador de idempotência. Reutilize o mesmo valor ao reenviar a mesma tentativa.' },
                 expectedTotal: amount
             },
             ['requestId', 'type', 'payment', 'items', 'expectedTotal']
         ),
-        OrderReceipt: object(orderSummary),
+        OrderReceipt: object({ ...orderSummary, emailStatus: choice(['sent', 'unconfirmed']) }, Object.keys(orderSummary)),
+        ReceiptClaim: object({ ticket: { type: 'string', pattern: '^[A-Za-z0-9_-]{43}$', writeOnly: true } }),
+        MailReceipt: object({ id: orderId, total: amount, email: receiptEmail }),
         OrderSummary: object({ ...orderSummary, createdAt: dateTime }),
         OrderList: object({ orders: list(ref('OrderSummary')) }),
         AdminOrder: {
